@@ -1,0 +1,575 @@
+---
+title: "Pràctica 2"
+author: Pere Moles i Cristina Vilageliu
+output: pdf_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+# Descripció del dataset
+
+El joc de dades seleccionat és PokemonData. Hem obtingut aquest dataset del banc de dades Kaggle (disponible a https://www.kaggle.com/datasets/abcsds/pokemon). 
+
+El món dels videojocs guanya cada dia més adeptes i fins i tot hi ha gent que viu de jugar-hi, ja sigui participant a tornejos, fent videos a Youtube o jugant en directe en plataformes d'streaming. 
+
+Un dels grans clàssics dels videojocs, i també dels dibuixos animats i còmics japonesos, és sense dubte __Pokemon__. 
+
+El videojoc ens posa en la pell d'un entrenador d'aquests particulars animals fantàstics anomenats Pokemon. Els Pokemon tenen diferents característiques, evolucionen i gràcies a ells els seus entrenadors poden guanyar tornejos.
+Els entrenadors, a més, han de reunir tants Pokemon com puguin i aspiren a tenir els millors per a poder guanyar en les lligues que s'organitzen. Però, quins son els millors? 
+
+Gràcies a aquest dataset podrem analitzar les diferents característiques dels Pokemon per a poder determinar quins son els millors tipus de Pokemon i competir per a guanyar tots els tornejos!
+
+```{r, echo=FALSE}
+#pokemon <- read.csv('\\Users\\USER1\\Documents\\Pokemon.csv')
+
+pokemon <- read.csv("C:\\Users\\crisv\\Desktop\\PokemonData.csv")
+```
+
+
+# Integració i selecció.
+
+El fitxer de dades conté 800 observacions i 12 variables.
+
+Tenim 3 variables categòriques, 8 variables numèriques i 1 variable dicotòmica.
+
+Les variables que formen aquest dataset son:
+
+'#' (identificador), 'Name'(nom), 'Type1' (grup al que pertany un Pokemon depenent de les seves característiques), 'Type2'(alguns Pokemons tenen dos tipus, 'HP' (Salut), 'Attack' (potència d'atac), 'Defense' (capacitat de defensa), 'SpAtk' (atac especial), 'SpDef' (defensa especial), 'Speed' (velocitat), 'Generation' (generació) i 'Legendary' (si son llegendaris o no ho son).
+
+Les variables d'interès seran 'HP', 'Attack', 'Defense', 'SpAtk', 'SpDef', 'Speed', 'Generations' i 'Type 1'.
+
+# Neteja de les dades
+
+## Zeros i elements buits
+
+Anem a donar un cop d'ull a les dades per a veure si aquestes contenen valors nuls o elements buits.
+
+```{r}
+colSums(is.na(pokemon))
+```
+
+Veiem que no hi ha cap columna amb elements buits.
+
+```{r}
+colSums(pokemon == "")
+```
+
+També veiem que no hi ha cap observació en blanc.
+
+```{r}
+colSums(pokemon == 0)
+```
+
+I, per últim, veiem que no hi ha cap variable amb zeros o valors nuls. La única columna que en té és la de 'Legendary', però aquesta és una variable dicotòmica on 0 és un valor amb significat (el Pokemon en qüestió NO és legendari).
+
+## Valors extrems
+
+Anem a analitzar ara els valors extrems i determinar si son errors o no.
+
+```{r, echo=FALSE, out.width="75%"}
+par(mfrow = c(2,2))
+
+for (i in 1:ncol(pokemon)) {
+  if (is.numeric(pokemon[,i])){
+    boxplot(pokemon[,i], main = colnames(pokemon)[i], width = 100)
+  }
+}
+```
+
+Veiem que les variables numèriques amb més outliers són 'HP' (o salut), 'Defense' i 'SpDef'. No els podem considerar outliers ja que determinen valors de salut i defensa per sobre de la mitja, és a dir, descriuen a Pokemon amb molta resistència. Aquesta dada podria ser interessant a l'hora d'escollir quin és el millor Pokemon així que no elimanerem els outliers ja que no són errors i ens poden donar informació valiosa.
+
+# Anàlisi de les dades
+
+## Anàlisi descriptiva
+
+### Estadistiques Pokemon
+
+```{r}
+pokemon_stats <- pokemon[,c(5,6,7,8,9,10)]
+
+summary(pokemon_stats)
+```
+
+```{r}
+boxplot(pokemon_stats)
+```
+La funció summary ens permet obtenir un resum de les mesures de tendència central i dispersió mes importants per tal de realitzar l'anàlisi descriptiu de les dades.
+
+Hem de tenir en compte que els stats de Pokemon son en base a 255. Nomes s'assoleix aquesta xifra en algun Pokemon per l'estadistica de HP. Alguns stats com velocitat (180), atac (190) o atac especial (194) queden lluny d'aquesta xifra.
+
+
+Podem observar diferències en la mitjana dels stats, i que la mitjana mes alta es la d'Atac (amb 79) i la mes baixa la Velocitat (amb 68.28).
+
+
+Observem gràficament com està distribuida cada estadística de Pokemon. Ho agrupem en intervals de 10.
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+```
+
+
+```{r, echo=FALSE}
+library(reshape2)
+
+test_data_long <- melt(pokemon_stats)
+
+ggplot(test_data_long, aes(value, colour = variable)) +
+     geom_freqpoly(binwidth = 10)
+
+```
+
+
+
+Observem com la distribucio de les diferents estadistiques es bastant similar.
+
+
+### Freqüència dels tipus de Pokemon
+
+Realitzarem una gràfica utilitzant la llibreria Upset que ens permet visualitzar millor la freqüència d'interseccions. Així doncs, podrem visualitzar els parells de tipus més comuns, i també els tipus individualment.
+
+Primer de tot crearem les següents columnes a partir de les variables Type 1 i Type 2:
+
+```{r}
+type_list <- unique(pokemon$Type1)
+
+pokemon[type_list]<-0
+
+
+for(type in type_list){
+  pokemon[type] <- ifelse(pokemon$Type1 == type | pokemon$Type2 == type,1,0)
+}
+
+pokemon$type<-NULL
+
+```
+
+A continuació creem la gràfica.
+
+```{r, echo=FALSE}
+if(!require(UpSetR)) install.packages("UpSetR",repos = "http://cran.us.r-project.org")
+library(UpSetR)
+
+upset(pokemon, nsets = 18, number.angles = 30, point.size = 1.5, line.size = 0.8, 
+       mainbar.y.label = "Type Intersections", sets.x.label = "Pokemon per Type", 
+      text.scale = 0.5 , order.by = "freq")
+```
+Observem que els tipus de Pokemon mes populars son Aigua i Normal, i les combinacions mes populars son Normal-Volador i Planta-Veri.
+
+### Mitjana de les estadístiques per tipus de Pokemon
+
+A continuació volem veure la mitjana de cada estadística depenent del tipus de Pokemon.
+
+```{r}
+
+
+df <- aggregate(pokemon$HP, list(pokemon$Type1), FUN=mean)
+colnames(df)[2] <- 'HP'
+
+
+for(i in 6:11){
+  df<- merge(df,aggregate(pokemon[i], list(pokemon$Type1), FUN=mean),by="Group.1")
+}
+df
+
+```
+
+
+
+
+```{r, echo=FALSE, out.width="75%"}
+
+df2<- df
+df2$Group.1 <- factor(df2$Group.1,                                    
+                  levels = df2$Group.1[order(df2$HP, decreasing = TRUE)])
+
+ggplot(data = df2, aes(fill=Group.1, y=HP, x=Group.1)) + 
+    geom_col(position="dodge", stat="identity")+ggtitle("Mitjana de l'habilitat HP segons el tipus")
+```
+
+
+
+```{r, echo=FALSE, out.width="75%"}
+df2<- df
+df2$Group.1 <- factor(df2$Group.1,                                    
+                  levels = df2$Group.1[order(df2$Attack, decreasing = TRUE)])
+
+ggplot(data = df2, aes(fill=Group.1, y=Attack, x=Group.1)) + 
+    geom_col(position="dodge", stat="identity")+ggtitle("Mitjana de l'habilitat Attack segons el tipus")
+```
+
+```{r, echo=FALSE, out.width="75%"}
+
+df2<- df
+df2$Group.1 <- factor(df2$Group.1,                                    
+                  levels = df2$Group.1[order(df2$Defense, decreasing = TRUE)])
+
+ggplot(data = df2, aes(fill=Group.1, y=Defense, x=Group.1)) + 
+    geom_col(position="dodge", stat="identity")+ggtitle("Mitjana de l'habilitat Defense segons el tipus")
+```
+
+```{r, echo=FALSE, out.width="75%"}
+
+df2<- df
+df2$Group.1 <- factor(df2$Group.1,                                    
+                  levels = df2$Group.1[order(df2$SpAtk, decreasing = TRUE)])
+
+ggplot(data = df2, aes(fill=Group.1, y=SpAtk, x=Group.1)) + 
+    geom_col(position="dodge", stat="identity")+ggtitle("Mitjana de l'habilitat Sp.Attack segons el tipus")
+```
+
+```{r, echo=FALSE, out.width="75%"}
+
+df2<- df
+df2$Group.1 <- factor(df2$Group.1,                                    
+                  levels = df2$Group.1[order(df2$SpDef, decreasing = TRUE)])
+
+ggplot(data = df2, aes(fill=Group.1, y=SpDef, x=Group.1)) + 
+    geom_col(position="dodge", stat="identity")+ggtitle("Mitjana de l'habilitat Sp.Defense segons el tipus")
+```
+
+```{r, echo=FALSE, out.width="75%"}
+
+df2<- df
+df2$Group.1 <- factor(df2$Group.1,                                    
+                  levels = df2$Group.1[order(df2$Speed, decreasing = TRUE)])
+
+ggplot(data = df2, aes(fill=Group.1, y=Speed, x=Group.1)) + 
+    geom_col(position="dodge", stat="identity")+ggtitle("Mitjana de l'habilitat Speed segons el tipus")
+```
+
+### Cas particular: descartem Pokemon Llegendaris i Mega-Evolucions
+
+A continuacio analitzem els canvis que es produeixen si descartem Pokemon Llegendaris i Mega-evolucions, que son els Pokemon mes poderosos del joc.
+
+```{r, echo=FALSE}
+library(stringr)
+no_legends <- pokemon[pokemon$Legendary == 'FALSE',]
+no_legends_and_mega <- no_legends[str_detect(no_legends$Name,'Mega ')=='FALSE',]
+no_legends_and_mega_stats <- no_legends_and_mega[,c(6,7,8,9,10,11)]
+```
+
+
+```{r}
+summary(no_legends_and_mega_stats)
+```
+
+```{r, echo=FALSE, out.width="75%"}
+bp<-boxplot(no_legends_and_mega_stats)
+
+```
+Observem una clara disminució en les diferents variables respecte al resum anterior on estaven inclosos els Pokemon Llegendaris i Mega-Evolucions.
+
+
+
+## Anàlisi de la normalitat i homoscedasticitat
+
+Comprovem si les dades tenen una distribució normal amb el test de Shapiro-Wilk.
+
+```{r}
+shapiro.test(pokemon$HP)
+```
+
+```{r}
+shapiro.test(pokemon$Attack)
+```
+
+```{r}
+shapiro.test(pokemon$Defense)
+```
+
+```{r}
+shapiro.test(pokemon$SpAtk)
+```
+```{r}
+shapiro.test(pokemon$SpDef)
+```
+
+```{r}
+shapiro.test(pokemon$Speed)
+```
+
+Com veiem, totes les variables d'interès tenen un p-valor més petit que el nivell de significança així que podem dir que cap de les nostres variables té una distribució normal.
+
+Anem ara a comprobar la homoscedasticitat amb el test de Fligner-Killeen.
+
+```{r}
+fligner.test(Attack ~ SpAtk, data = pokemon)
+```
+
+```{r}
+fligner.test(Defense ~ SpDef, data = pokemon)
+```
+
+```{r}
+fligner.test(HP ~ Speed, data = pokemon)
+```
+
+Aquestes son algunes de les comparacions que hem fet per analitzar la igualtat de variàncies. Podem veure, en la mostra més rellevant, que el p-valor està per sota del nivell de significança en tots els casos així que tampoc podem garantir la homoscedasticitat de els dades.
+
+
+## Anàlisi de correlacions
+
+Volem veure si existeix alguna correlació entre les diferents estadístiques dels Pokemon.
+
+Primer de tot, dibuixem els diferents diagrames de dispersió de totes les variables.
+
+```{r}
+pairs(pokemon_stats, pch = 19,  cex = 0.5,  lower.panel=NULL)
+```
+
+A primera vista, sembla que podem observar alguna lleugera correlació entre algunes variables.
+
+Per a comprovar-ho, observarem la matriu de correlacions.
+
+```{r}
+corr <- cor(pokemon_stats)
+corr
+
+```
+
+Podem observar que les parelles de stats que estan més correlacionades son:
+
+- La defensa i la defensa especial
+- L'atac especial i la defensa especial
+- Velocitat i atac especial
+
+En canvi, les variables menys correlacionades son:
+
+- Velocitat i Defensa
+- Velocitat i HP
+- Defensa i atac especial.
+
+Podem visualitzar-ho amb la seguent gràfica
+
+```{r}
+library(ggcorrplot)
+ggcorrplot(corr)
+```
+
+
+
+## Comparació entre més de dos grups
+
+Per a seguir amb el nostre anàlisi, farem una comparació entre la variable 'Type1' i la resta de variables numèriques. EL què pretenem és veure si tots els possibles tipus de Pokemon tenen característiques similars o si, per el contrari, difereixen. 
+
+Per a fer-ho, farem servir l’alternativa no paramètrica als contrastos d’hipòtesis de més
+de 2 grups: el test de Kruskal-Wallis. Utilitzem aquest mètode ja que les dades no segueixen una distribució normal.
+
+El nivell de confiança que utilitzarem és del 95%.
+
+```{r}
+kruskal.test(HP ~ Type1, data = pokemon)
+```
+
+El p-valor és més petit que el nivell de significança (0.05) així que podem concloure que els diferents tipus de Pokemon ('Type1') tenen diferents nivells de 'HP' (Salut).
+
+Observem en un gràfic les diferents mitjanes de cada tipus.
+
+```{r, echo=FALSE, out.width="75%"}
+HPmean <- reorder(pokemon$Type1, pokemon$HP, mean)
+HP_means <- aggregate(pokemon$HP, 
+                        list(HPmean),
+                        mean)
+
+boxplot(pokemon$HP ~ HPmean, 
+        las = 2, 
+        xlab = "Tipus de Pokemon", 
+        ylab = "HP (Salut)")
+points(x = 1:nrow(HP_means),                      
+       y = HP_means$x,
+       col = "blue",
+       pch = 10)
+```
+
+Veiem que els Pokemon de tipus Bug, Electric i Ghost son els que menys 'HP' tenen.
+
+Els tipus Dragon, Normal i Fairy són els que més 'HP' tenen.
+
+
+```{r}
+kruskal.test(Attack ~ Type1, data = pokemon)
+```
+
+Per a la variable 'Attack' (Atac) el p-valor és més petit que el nivell de significança (0.05) així que podem concloure que els diferents tipus de Pokemon ('Type1') tenen diferents nivells de 'Attack'.
+
+
+Observem en un gràfic les diferents mitjanes de cada tipus.
+
+```{r, echo=FALSE, out.width="75%"}
+Attackmean <- reorder(pokemon$Type1, pokemon$Attack, mean)
+Attack_means <- aggregate(pokemon$Attack, 
+                        list(Attackmean),
+                        mean)
+
+boxplot(pokemon$Attack ~ Attackmean, 
+        las = 2, 
+        xlab = "Tipus de Pokemon", 
+        ylab = "Attack (Atac)")
+points(x = 1:nrow(Attack_means),
+       y = Attack_means$x,
+       col = "blue",
+       pch = 10)
+```
+
+Els tipus de Pokemon amb un atac més fluix són Fairy, Electric i Bug.
+
+Per altre banda, els tipus de Pokemon amb millor atac són: Dragon, Fighting i Ground.
+
+
+
+```{r}
+kruskal.test(Defense ~ Type1, data = pokemon)
+```
+
+Per a la variable 'Defense' (Defensa) el p-valor és més petit que el nivell de significança (0.05) així que podem concloure que els diferents tipus de Pokemon ('Type1') tenen diferents nivells de 'Defense'.
+
+
+Observem en un gràfic les diferents mitjanes de cada tipus.
+
+```{r, echo=FALSE, out.width="75%"}
+Defensemean <- reorder(pokemon$Type1, pokemon$Defense, mean)
+Defense_means <- aggregate(pokemon$Defense, 
+                        list(Defensemean),
+                        mean)
+
+boxplot(pokemon$Defense ~ Defensemean, 
+        las = 2, 
+        xlab = "Tipus de Pokemon", 
+        ylab = "Defense (Defensa)")
+points(x = 1:nrow(Defense_means),
+       y = Defense_means$x,
+       col = "blue",
+       pch = 10)
+```
+
+En el gràfic boxplot podem veure que els Pokemon amb pitjor capacitat defensiva son els de tipus Normal, Fairy i Fighting.
+
+També veiem que els Pokemon amb millor defensa son els de tipus Steel, Rock i Dragon.
+
+
+```{r}
+kruskal.test(SpAtk ~ Type1, data = pokemon)
+```
+
+Per a la variable 'SpAtk' (Atac Especial) el p-valor és més petit que el nivell de significança (0.05) així que podem concloure que els diferents tipus de Pokemon ('Type1') tenen diferents nivells de 'SPAtk'.
+
+
+Observem en un gràfic les diferents mitjanes de cada tipus.
+
+```{r, echo=FALSE, out.width="75%"}
+SpAtkmean <- reorder(pokemon$Type1, pokemon$SpAtk, mean)
+SpAtk_means <- aggregate(pokemon$SpAtk, 
+                        list(SpAtkmean),
+                        mean)
+
+boxplot(pokemon$SpAtk ~ SpAtkmean, 
+        las = 2, 
+        xlab = "Tipus de Pokemon", 
+        ylab = "SpAtk (Atac Especial)")
+points(x = 1:nrow(SpAtk_means),
+       y = SpAtk_means$x,
+       col = "blue",
+       pch = 10)
+```
+
+Per als atacs especials és millor no comptar amb Pokemon de tipus Fighting, Bug o Normal i apostar millor per als de tipus Flying, Dragon o Psychic.
+
+
+```{r}
+kruskal.test(SpDef ~ Type1, data = pokemon)
+```
+
+Per a la variable 'SpDef' (Defensa Especial) el p-valor és més petit que el nivell de significança (0.05) així que podem concloure que els diferents tipus de Pokemon ('Type1') tenen diferents nivells de 'SPDef'.
+
+
+Observem en un gràfic les diferents mitjanes de cada tipus.
+
+```{r, echo=FALSE, out.width="75%"}
+SpDefmean <- reorder(pokemon$Type1, pokemon$SpDef, mean)
+SpDef_means <- aggregate(pokemon$SpDef, 
+                        list(SpDefmean),
+                        mean)
+
+boxplot(pokemon$SpDef ~ SpDefmean, 
+        las = 2, 
+        xlab = "Tipus de Pokemon", 
+        ylab = "SpDef (Defensa Especial)")
+points(x = 1:nrow(SpDef_means),
+       y = SpDef_means$x,
+       col = "blue",
+       pch = 10)
+```
+
+Els Pokemon amb pitjor 'SpDef' de mitjana son Ground, Normal i Poison i els que tenen millor defensa especial son Fairy, Psychic i Dragon.
+
+
+```{r}
+kruskal.test(Speed ~ Type1, data = pokemon)
+```
+
+Per últim, veiem que la variable 'Speed' (Velocitat) també té un p-valor per sota del nivell de significança (0.05) així que també determinem que les mitjanes de velocitat per als diferents tipus de Pokemon son diferents.
+
+
+Mirem en un gràfic com es distribueixen els diferents tipus segons la seva velocitat.
+
+```{r, echo=FALSE, out.width="75%"}
+Speedmean <- reorder(pokemon$Type1, pokemon$Speed, mean)
+Speed_means <- aggregate(pokemon$Speed, 
+                        list(Speedmean),
+                        mean)
+
+boxplot(pokemon$Speed ~ Speedmean, 
+        las = 2, 
+        xlab = "Tipus de Pokemon",
+        ylab = "Speed (Velocitat)")
+points(x = 1:nrow(Speed_means),
+       y = Speed_means$x,
+       col = "blue",
+       pch = 10)
+```
+
+
+Veiem que els Pokemon més lents de mitjana son els de tipus Fairy, Steel i Rock. En canvi, els més ràpids son els de tipus Dragon, Electric i Flying.
+
+
+Com a conclusió, podem dir que les característiques analitzades per a cada tipus de Pokemon són molt diferents, veiem clarament diferències entre els tipus ('Type1') de Pokemon. 
+
+Com a jugadors, ens interessarà reunir la millor quantitat de Pokemon de tipus Dragon, com per exemple Dragonite o Salamence.
+
+Per altre banda, segons el nostre estudi de les característiques principals dels Pokemon, els Pokemon de tipus Bug (Caterpie o Volbeat), Fairy (Clefairy o Swirlix) o Normal (Pidgey o Rattata)  no ens interessarien tant ja que son els que pitjors estadístiques tenen.
+
+# Conclusions
+
+El procés de neteja ha sigut senzill donat que les dades no contenen valors nuls ni zeros. Hem trobat una variable amb valors en blanc però no ha afectat en el nostre estudi així que no ens ha fet falta tractar-la.
+
+L'estadística de Pokemon amb la mitjana més alta és Attack. En canvi, l'estadística amb la mitjana més baixa es Speed.
+
+Si excloem els Pokemon llegendaris i les Mega-Evolucions, observem una disminució notable en les mitjanes de les diferents estadístiques dels Pokemon.
+
+Hem comprovat que les dades no segueixen una distribució normal ni tenen variàncies iguals (homoscedasticitat).
+
+Els tipus de Pokemon més freqüents son Aigua i Normal, i les combinacions més populars son normal-Volador i Planta-Veri.
+
+Observem una notable correlació entre la defensa i la defensa especial, l'atac especial i la defensa especial i per ultim, la velocitat i l’atac especial. En canvi, observem una correlació baixa entre Velocitat i Defensa, Velocitat i HP, Defensa i atac especial.
+
+Hem comparat els diferents tipus de Pokemon en funció de cada característica i hem vist que hi ha diferències d’’stats’ en cada grup. Els Pokemon més forts són els de tipus Dragon i els més dèbils són els tipus Bug, Fairy i Normals, segons el nostre estudi.
+
+
+
+| Contribucions             | Signatura |
+|---------------------------|-----------|
+| Investigació prèvia       | PM/CV     |
+| Redacció de les respostes | PM/CV     |
+| Desenvolupament del codi  | PM/CV     |
+| Participació al vídeo     | PM/CV     |
+
+```{r, echo=FALSE}
+write.csv(pokemon, file = "C:\\Users\\crisv\\Desktop\\PokemonData.csv")
+```
+
+
