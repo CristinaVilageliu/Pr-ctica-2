@@ -4,6 +4,8 @@
 
 Components del grup: Pere Moles i Cristina Vilagelilu
 
+Assignatura: Tipologia i cicle de vida de les dades
+
 ## Contingut
 
 Aquest repositor conté els següents fitxers:
