@@ -1,4 +1,4 @@
-# Pr-ctica-2
+# Pràctica 2
 
 ## Autors
 
